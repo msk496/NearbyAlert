@@ -13,6 +13,8 @@ import android.location.Location
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -27,6 +29,8 @@ import java.util.Locale
 class LocationTrackingService : Service() {
     private lateinit var fused:FusedLocationProviderClient
     private var started=false
+    private val alertHandler = Handler(Looper.getMainLooper())
+    private val stopVibrationRunnable = Runnable { vibrator()?.cancel() }
     private val inside=mutableSetOf<String>()
     companion object { const val ACTION_DESTINATIONS_CHANGED="com.example.nearbyalert.DESTINATIONS_CHANGED" }
     private val callback=object:LocationCallback(){override fun onLocationResult(result:LocationResult){result.lastLocation?.let{checkDestinations(it)}}}
@@ -44,17 +48,44 @@ class LocationTrackingService : Service() {
         destinations.forEach{d->val out=FloatArray(1);Location.distanceBetween(current.latitude,current.longitude,d.latitude,d.longitude,out);val meters=out[0];if(meters<nearestMeters){nearest=d;nearestMeters=meters};val wasInside=inside.contains(d.id);if(meters<=d.radiusMeters){if(!wasInside){notifyArrival(d,meters,prefs);if(autoDisable){val updated=all.map{if(it.id==d.id)it.copy(enabled=false)else it};DestinationStore.save(this,updated)}else armed.add(d.id)}}else if(meters>d.radiusMeters+(if(hysteresis)150f else 0f)){armed.remove(d.id)}}
         inside.clear();inside.addAll(armed.filter{id->destinations.any{it.id==id}});val arr=JSONArray();inside.forEach{arr.put(it)};prefs.edit().putString("inside_ids",arr.toString()).apply();updateTrackingNotification(nearest,nearestMeters)
     }
-    private fun notifyArrival(d:Destination,meters:Float,prefs:android.content.SharedPreferences){val title="${d.name} 근처에 도착했어요";val text="목적지까지 ${formatDistance(meters)} · 설정 반경 ${d.radiusMeters.toInt()}m";if(prefs.getBoolean("vibrate",true))vibrate();if(prefs.getBoolean("sound",true)){try{RingtoneManager.getRingtone(this,RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))?.play()}catch(_:Exception){}};val manager=getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager;manager.notify(alertId(d.id),alertNotification(d.id,title,text));val raw=prefs.getString("history","[]")?:"[]";val old=JSONArray(raw);val arr=JSONArray();val stamp=SimpleDateFormat("MM-dd HH:mm",Locale.KOREA).format(Date());arr.put("$stamp · $title\n$text");for(i in 0 until minOf(old.length(),49))arr.put(old.getString(i));prefs.edit().putString("history",arr.toString()).apply()}
+    private fun notifyArrival(d:Destination,meters:Float,prefs:android.content.SharedPreferences){val title="${d.name} 근처에 도착했어요";val text="목적지까지 ${formatDistance(meters)} · 설정 반경 ${d.radiusMeters.toInt()}m";if(prefs.getBoolean("vibrate",true))startAlarmVibration();if(prefs.getBoolean("sound",true)){try{RingtoneManager.getRingtone(this,RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))?.play()}catch(_:Exception){}};val manager=getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager;manager.notify(alertId(d.id),alertNotification(d.id,title,text));val raw=prefs.getString("history","[]")?:"[]";val old=JSONArray(raw);val arr=JSONArray();val stamp=SimpleDateFormat("MM-dd HH:mm",Locale.KOREA).format(Date());arr.put("$stamp · $title\n$text");for(i in 0 until minOf(old.length(),49))arr.put(old.getString(i));prefs.edit().putString("history",arr.toString()).apply()}
     private fun formatDistance(m:Float)=if(m<1000)"${m.toInt()}m" else "%.1fkm".format(m/1000f)
     private fun alertId(id:String)=(id.hashCode() and 0x7fffffff)%100000+2000
-    private fun vibrate(){try{
-        val v:Vibrator=if(Build.VERSION.SDK_INT>=31)(getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator else (getSystemService(VIBRATOR_SERVICE) as Vibrator)
-        if(Build.VERSION.SDK_INT>=26)v.vibrate(VibrationEffect.createWaveform(longArrayOf(0,450,200,450),-1)) else v.vibrate(650)
-    }catch(_:Exception){}}
+    private fun vibrator(): Vibrator? = try {
+        if (Build.VERSION.SDK_INT >= 31) (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        else (getSystemService(VIBRATOR_SERVICE) as Vibrator)
+    } catch (_: Exception) { null }
+
+    private fun startAlarmVibration() {
+        try {
+            val v = vibrator() ?: return
+            alertHandler.removeCallbacks(stopVibrationRunnable)
+            val pattern = longArrayOf(0, 700, 300, 700, 300)
+            if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            else {
+                @Suppress("DEPRECATION")
+                v.vibrate(pattern, 0)
+            }
+            alertHandler.postDelayed(stopVibrationRunnable, 60_000L)
+        } catch (_: Exception) { }
+    }
     private fun createChannels(){if(Build.VERSION.SDK_INT>=26){val m=getSystemService(NotificationManager::class.java);m.createNotificationChannel(NotificationChannel("nearby_alert","목적지 진입 알림",NotificationManager.IMPORTANCE_HIGH).apply{description="목적지 반경 진입 시 알림";enableVibration(false);setSound(null,null);vibrationPattern=longArrayOf(0,450,200,450)});m.createNotificationChannel(NotificationChannel("tracking_status","위치 감지 상태",NotificationManager.IMPORTANCE_LOW).apply{description="현재 위치와 가장 가까운 목적지까지의 거리"})}}
     private fun pendingIntent(destinationId:String?):PendingIntent{val i=Intent(this,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP);if(destinationId!=null)i.putExtra("destination_id",destinationId);return PendingIntent.getActivity(this,if(destinationId==null)0 else alertId(destinationId),i,PendingIntent.FLAG_UPDATE_CURRENT or if(Build.VERSION.SDK_INT>=23)PendingIntent.FLAG_IMMUTABLE else 0)}
     private fun trackingNotification(text:String):Notification=NotificationCompat.Builder(this,"tracking_status").setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle("근처 알림 · 감지 중").setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text)).setContentIntent(pendingIntent(null)).setOngoing(true).setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_LOW).build()
-    private fun alertNotification(id:String,title:String,text:String):Notification=NotificationCompat.Builder(this,"nearby_alert").setSmallIcon(android.R.drawable.ic_dialog_map).setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text)).setContentIntent(pendingIntent(id)).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).build()
+    private fun alertNotification(id:String,title:String,text:String):Notification {
+        val acknowledgeIntent = Intent(this, AlertAcknowledgeReceiver::class.java).setAction(AlertAcknowledgeReceiver.ACTION_ACKNOWLEDGE).putExtra("notification_id", alertId(id))
+        val acknowledgePendingIntent = PendingIntent.getBroadcast(this, alertId(id), acknowledgeIntent, PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+        return NotificationCompat.Builder(this,"nearby_alert")
+            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$text\n확인 버튼을 누르면 진동이 멈춥니다."))
+            .setContentIntent(pendingIntent(id))
+            .addAction(android.R.drawable.ic_lock_idle_alarm, "확인 · 진동 끄기", acknowledgePendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+    }
     private fun updateTrackingNotification(d:Destination?=null,meters:Float=Float.MAX_VALUE){val text=if(d==null)"활성 목적지를 기다리는 중" else "가장 가까운 ${d.name}: ${formatDistance(meters)} · 활성 목적지 ${DestinationStore.get(this).count{it.enabled}}개";(getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(1001,trackingNotification(text))}
     override fun onDestroy(){if(::fused.isInitialized)fused.removeLocationUpdates(callback);started=false;super.onDestroy()}
     override fun onBind(intent:Intent?):IBinder?=null
