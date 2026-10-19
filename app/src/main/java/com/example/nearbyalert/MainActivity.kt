@@ -61,47 +61,79 @@ class MainActivity : AppCompatActivity() {
         fusedLocation = LocationServices.getFusedLocationProviderClient(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(16, 12, 16, 8)
+            setPadding(dp(14), dp(10), dp(14), dp(8))
+            setBackgroundColor(Color.rgb(247, 249, 252))
         }
-        root.addView(TextView(this).apply {
-            text = "근처 알림"; textSize = 26f; setTextColor(Color.rgb(25,35,52))
-        })
-        status = TextView(this).apply {
-            text = "장소를 검색하거나 지도를 길게 눌러 목적지를 추가하세요."
-            textSize = 16f
-            setPadding(0,8,0,8)
-        }
-        root.addView(status)
-
-        val searchRow = LinearLayout(this).apply {
+        val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(2), dp(4), dp(8))
+        }
+        header.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = "Nearby Alert"
+                textSize = 25f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setTextColor(Color.rgb(20, 38, 64))
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "내 주변의 중요한 장소를 놓치지 마세요"
+                textSize = 13f
+                setTextColor(Color.rgb(105, 120, 142))
+            })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(TextView(this).apply {
+            text = "● GPS"
+            textSize = 13f
+            setTextColor(Color.rgb(22, 132, 90))
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = roundedBackground(Color.rgb(226, 248, 239), dp(18))
+        })
+        root.addView(header)
+
+        status = TextView(this).apply {
+            text = "장소를 검색하거나 지도를 길게 눌러 목적지를 추가하세요."
+            textSize = 14f
+            setTextColor(Color.rgb(78, 94, 115))
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+
+        val searchCard = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), 0, dp(8), 0)
+            background = roundedBackground(Color.WHITE, dp(16))
+            elevation = dp(2).toFloat()
         }
         searchInput = EditText(this).apply {
             hint = "장소·주소 검색 (예: 평촌역)"
             textSize = 16f
             setSingleLine(true)
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setPadding(dp(8), 0, dp(4), 0)
+            background = null
+            setTextColor(Color.rgb(28, 42, 61))
         }
-        searchRow.addView(searchInput, LinearLayout.LayoutParams(0, dp(52), 1f))
+        searchCard.addView(TextView(this).apply { text = "⌕"; textSize = 28f; setTextColor(Color.rgb(35, 113, 239)) })
+        searchCard.addView(searchInput, LinearLayout.LayoutParams(0, dp(54), 1f))
         searchButton = Button(this).apply {
             text = "검색"
-            textSize = 16f
+            textSize = 14f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            background = roundedBackground(Color.rgb(27, 115, 239), dp(12))
             setOnClickListener { searchPlaces() }
         }
-        searchRow.addView(searchButton, LinearLayout.LayoutParams(dp(84), dp(52)))
+        searchCard.addView(searchButton, LinearLayout.LayoutParams(dp(72), dp(42)))
         searchInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
-                searchPlaces()
-                true
-            } else false
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) { searchPlaces(); true } else false
         }
-        root.addView(searchRow)
+        root.addView(searchCard)
 
         map = MapView(this).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
-            // Scale raster map tiles for high-density phone displays, making labels easier to read.
             setTilesScaledToDpi(true)
             controller.setZoom(13.5)
             controller.setCenter(GeoPoint(37.5665,126.9780))
@@ -113,61 +145,108 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }))
-        root.addView(map, LinearLayout.LayoutParams(-1, 0, 1f))
+        val mapFrame = FrameLayout(this).apply {
+            background = roundedBackground(Color.WHITE, dp(20))
+            clipToOutline = true
+            elevation = dp(3).toFloat()
+            addView(map, FrameLayout.LayoutParams(-1, -1))
+        }
+        val mapLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        mapLayout.addView(mapFrame, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(mapLayout, LinearLayout.LayoutParams(-1, 0, 1f).apply {
+            topMargin = dp(10)
+            bottomMargin = dp(8)
+        })
 
         distanceView = TextView(this).apply {
-            text = "내 위치를 확인하는 중…"
-            textSize = 17f
-            setTextColor(Color.rgb(25, 55, 95))
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            setBackgroundColor(Color.rgb(239, 246, 255))
+            text = "현재 위치를 확인하는 중…"
+            textSize = 15f
+            setTextColor(Color.rgb(28, 50, 80))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = roundedBackground(Color.WHITE, dp(16))
+            maxLines = 4
+            setLineSpacing(dp(3).toFloat(), 1f)
         }
-        root.addView(ScrollView(this).apply { isFillViewport = false; addView(distanceView) }, LinearLayout.LayoutParams(-1, dp(112)))
+        val distanceTitle = TextView(this).apply {
+            text = "활성 목적지까지의 거리"
+            textSize = 15f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(Color.rgb(27, 45, 70))
+            setPadding(dp(4), dp(2), dp(4), dp(5))
+        }
+        val distancePanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(distanceTitle)
+            addView(ScrollView(this@MainActivity).apply {
+                isFillViewport = false
+                addView(distanceView)
+            }, LinearLayout.LayoutParams(-1, dp(86)))
+        }
+        root.addView(distancePanel, LinearLayout.LayoutParams(-1, dp(120)))
 
         val bottomPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(4), 0, dp(4))
+            setPadding(0, dp(6), 0, dp(2))
         }
         bottomPanel.addView(Button(this).apply {
-            text = "＋ 위치 추가"
+            text = "＋  위치 추가"
             textSize = 16f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            background = roundedBackground(Color.rgb(25, 116, 239), dp(15))
             setOnClickListener {
                 val loc = lastKnownLocation
                 if (loc != null) addDestination(GeoPoint(loc.latitude, loc.longitude))
                 else addDestination(map.mapCenter as GeoPoint)
             }
-        }, LinearLayout.LayoutParams(0, dp(50), 1.2f))
+        }, LinearLayout.LayoutParams(0, dp(52), 1.15f).apply { rightMargin = dp(6) })
         bottomPanel.addView(Button(this).apply {
-            text = "등록된 위치"
+            text = "등록된 위치  ›"
             textSize = 15f
-            setOnClickListener { showRegisteredDestinations() }
-        }, LinearLayout.LayoutParams(0, dp(50), 1f))
+            isAllCaps = false
+            setTextColor(Color.rgb(30, 76, 132))
+            background = roundedBackground(Color.rgb(229, 240, 255), dp(15))
+            setOnClickListener { startActivity(Intent(this@MainActivity, RegisteredLocationsActivity::class.java)) }
+        }, LinearLayout.LayoutParams(0, dp(52), 1f))
         root.addView(bottomPanel)
 
-        val mapControls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        mapControls.addView(Button(this).apply { text = "−"; textSize = 22f; setOnClickListener { map.controller.zoomOut() } }, LinearLayout.LayoutParams(0,dp(48),1f))
-        mapControls.addView(Button(this).apply { text = "지도 글씨 크게"; textSize = 14f; setOnClickListener {
-            map.controller.setZoom((map.zoomLevelDouble + 1.0).coerceAtMost(19.0))
-            status.text = "지도를 확대했어요. 축소하면 더 넓은 지역을 볼 수 있어요."
-        } }, LinearLayout.LayoutParams(0,dp(48),2f))
-        mapControls.addView(Button(this).apply { text = "+"; textSize = 22f; setOnClickListener { map.controller.zoomIn() } }, LinearLayout.LayoutParams(0,dp(48),1f))
-        root.addView(mapControls)
-
-        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        buttons.addView(Button(this).apply { text = "현재 위치"; textSize = 14f; setOnClickListener { showCurrentLocation() } }, LinearLayout.LayoutParams(0,-2,1f))
-        buttons.addView(Button(this).apply { text = "감지 시작"; textSize = 14f; setOnClickListener { startTracking() } }, LinearLayout.LayoutParams(0,-2,1f))
-        buttons.addView(Button(this).apply { text = "전체 중지"; textSize = 14f; setOnClickListener {
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(4), 0, 0)
+        }
+        controls.addView(smallActionButton("내 위치") { showCurrentLocation() }, LinearLayout.LayoutParams(0, dp(42), 1f))
+        controls.addView(smallActionButton("감지 시작") { startTracking() }, LinearLayout.LayoutParams(0, dp(42), 1f))
+        controls.addView(smallActionButton("감지 중지") {
             DestinationStore.prefs(this@MainActivity).edit().putBoolean("tracking_active", false).apply()
             stopService(Intent(this@MainActivity, LocationTrackingService::class.java))
             status.text = "위치 감지를 중지했습니다."
-        } }, LinearLayout.LayoutParams(0,-2,1f))
-        root.addView(buttons)
+        }, LinearLayout.LayoutParams(0, dp(42), 1f))
+        controls.addView(smallActionButton("−") { map.controller.zoomOut() }, LinearLayout.LayoutParams(dp(44), dp(42)))
+        controls.addView(smallActionButton("+") { map.controller.zoomIn() }, LinearLayout.LayoutParams(dp(44), dp(42)))
+        root.addView(controls)
+        root.addView(status)
         destinationsView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         setContentView(root)
         requestBasicPermissions()
         renderDestinations()
         handleDestinationIntent(intent)
+    }
+
+    private fun roundedBackground(color: Int, radius: Int): android.graphics.drawable.GradientDrawable =
+        android.graphics.drawable.GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius.toFloat()
+        }
+
+    private fun smallActionButton(label: String, action: () -> Unit) = Button(this).apply {
+        text = label
+        textSize = 12f
+        isAllCaps = false
+        setTextColor(Color.rgb(47, 67, 91))
+        background = roundedBackground(Color.WHITE, dp(12))
+        setOnClickListener { action() }
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -325,6 +404,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (DestinationStore.get(this).isEmpty()) destinationsView.addView(TextView(this).apply { text = "아직 목적지가 없습니다. 지도를 길게 눌러 추가하세요."; textSize = 16f })
         map.invalidate()
+        lastKnownLocation?.let { updateLiveLocation(it) }
     }
 
     private fun showRegisteredDestinations() {
