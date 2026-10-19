@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- soft location-radius halo -->
+    <path android:fillColor="#55FFFFFF" android:pathData="M54,15 A39,39 0,1 0,54 93 A39,39 0,1 0,54 15 Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.65" android:pathData="M54,22 A32,32 0,1 0,54 86 A32,32 0,1 0,54 22 Z" />
+    <!-- blue location pin -->
+    <path android:fillColor="#185AF2" android:pathData="M54,25 C41.3,25 31,35.3 31,48 C31,64.2 50.4,81.5 52.6,83.4 C53.4,84.1 54.6,84.1 55.4,83.4 C57.6,81.5 77,64.2 77,48 C77,35.3 66.7,25 54,25 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M54,37 C47.9,37 43,41.9 43,48 C43,54.1 47.9,59 54,59 C60.1,59 65,54.1 65,48 C65,41.9 60.1,37 54,37 Z" />
+    <!-- alert badge -->
+    <path android:fillColor="#FFFFFF" android:pathData="M77,54 C88.6,54 98,63.4 98,75 C98,86.6 88.6,96 77,96 C65.4,96 56,86.6 56,75 C56,63.4 65.4,54 77,54 Z" />
+    <path android:fillColor="#FF4D4F" android:pathData="M77,57 C86.9,57 95,65.1 95,75 C95,84.9 86.9,93 77,93 C67.1,93 59,84.9 59,75 C59,65.1 67.1,57 77,57 Z" />
+    <!-- white bell -->
+    <path android:fillColor="#FFFFFF" android:pathData="M77,65 C73.2,65 70.5,68.1 70.5,72 L70.5,77.4 C70.5,80.1 68.8,82 67,83.4 L67,85 L87,85 L87,83.4 C85.2,82 83.5,80.1 83.5,77.4 L83.5,72 C83.5,68.1 80.8,65 77,65 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M74,87 C74.2,89.1 75.3,90.2 77,90.2 C78.7,90.2 79.8,89.1 80,87 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M68,69 C66.2,71 65.5,73.1 65.5,75.2 C65.5,76.6 66.3,77.4 67.4,77.4 C68.5,77.4 69.2,76.5 69.2,75.2 C69.2,73.8 69.7,72.5 70.7,71.4 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M86,69 L83.3,71.4 C84.3,72.5 84.8,73.8 84.8,75.2 C84.8,76.5 85.5,77.4 86.6,77.4 C87.7,77.4 88.5,76.6 88.5,75.2 C88.5,73.1 87.8,71 86,69 Z" />
+</vector>
