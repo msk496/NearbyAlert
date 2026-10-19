@@ -14,6 +14,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.Priority
+import android.location.Location
 import org.osmdroid.config.Configuration
 import org.json.JSONArray
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -34,13 +40,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var destinationsView: LinearLayout
     private lateinit var searchInput: EditText
     private lateinit var searchButton: Button
+    private lateinit var distanceView: TextView
+    private var currentMarker: Marker? = null
+    private lateinit var fusedLocation: FusedLocationProviderClient
+    private var locationUpdatesStarted = false
     private val requestCode = 501
+
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            result.lastLocation?.let { location -> updateLiveLocation(location) }
+        }
+    }
 
     private data class SearchPlace(val name: String, val latitude: Double, val longitude: Double)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().userAgentValue = "NearbyAlert/1.0 (com.example.nearbyalert)"
+        fusedLocation = LocationServices.getFusedLocationProviderClient(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(16, 12, 16, 8)
@@ -96,6 +113,15 @@ class MainActivity : AppCompatActivity() {
             }
         }))
         root.addView(map, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        distanceView = TextView(this).apply {
+            text = "내 위치를 확인하는 중…"
+            textSize = 17f
+            setTextColor(Color.rgb(25, 55, 95))
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setBackgroundColor(Color.rgb(239, 246, 255))
+        }
+        root.addView(distanceView, LinearLayout.LayoutParams(-1, dp(54)))
 
         val mapControls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         mapControls.addView(Button(this).apply { text = "−"; textSize = 22f; setOnClickListener { map.controller.zoomOut() } }, LinearLayout.LayoutParams(0,dp(48),1f))
@@ -256,7 +282,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderDestinations() {
         if (!::map.isInitialized || !::destinationsView.isInitialized) return
         destinationsView.removeAllViews()
-        map.overlays.removeAll { it is Marker || it is Polygon }
+        map.overlays.removeAll { it is Polygon || (it is Marker && it.title != "내 위치") }
         DestinationStore.get(this).forEach { d ->
             val point = GeoPoint(d.latitude, d.longitude)
             map.overlays.add(Marker(map).apply { position = point; title = d.name; setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM) })
@@ -295,6 +321,55 @@ class MainActivity : AppCompatActivity() {
         try { startService(Intent(this, LocationTrackingService::class.java).setAction(LocationTrackingService.ACTION_DESTINATIONS_CHANGED)) } catch (_: Exception) {}
     }
 
+    private fun updateLiveLocation(location: Location) {
+        val point = GeoPoint(location.latitude, location.longitude)
+        if (currentMarker == null) {
+            currentMarker = Marker(map).apply {
+                title = "내 위치"
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                icon = ContextCompat.getDrawable(this@MainActivity, android.R.drawable.presence_online)
+            }
+            map.overlays.add(currentMarker)
+        }
+        currentMarker?.position = point
+        val destinations = DestinationStore.get(this).filter { it.enabled }
+        val nearest = destinations.minByOrNull { d ->
+            val out = FloatArray(1)
+            Location.distanceBetween(location.latitude, location.longitude, d.latitude, d.longitude, out)
+            out[0]
+        }
+        if (nearest == null) {
+            distanceView.text = "현재 위치 · 목적지를 등록하면 거리가 표시됩니다."
+        } else {
+            val out = FloatArray(1)
+            Location.distanceBetween(location.latitude, location.longitude, nearest.latitude, nearest.longitude, out)
+            val meters = out[0]
+            val distance = if (meters < 1000) "${meters.toInt()}m" else String.format(java.util.Locale.KOREA, "%.1fkm", meters / 1000f)
+            distanceView.text = "가장 가까운 목적지  ${nearest.name}  ·  $distance"
+        }
+        if (!map.isAnimating && map.zoomLevelDouble >= 13.0) map.controller.animateTo(point)
+        map.invalidate()
+    }
+
+    private fun beginLiveLocationUpdates() {
+        if (locationUpdatesStarted) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
+            .setMinUpdateIntervalMillis(1500L)
+            .setWaitForAccurateLocation(false)
+            .build()
+        try {
+            fusedLocation.requestLocationUpdates(request, locationCallback, mainLooper)
+            locationUpdatesStarted = true
+        } catch (_: SecurityException) { }
+    }
+
+    private fun stopLiveLocationUpdates() {
+        if (locationUpdatesStarted) fusedLocation.removeLocationUpdates(locationCallback)
+        locationUpdatesStarted = false
+    }
+
     private fun showCurrentLocation() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -329,7 +404,7 @@ class MainActivity : AppCompatActivity() {
         status.text = "위치 감지를 시작했습니다."
     }
 
-    override fun onResume() { super.onResume(); if (::map.isInitialized) map.onResume(); renderDestinations() }
-    override fun onPause() { if (::map.isInitialized) map.onPause(); super.onPause() }
+    override fun onResume() { super.onResume(); if (::map.isInitialized) map.onResume(); renderDestinations(); if (::fusedLocation.isInitialized) beginLiveLocationUpdates() }
+    override fun onPause() { stopLiveLocationUpdates(); if (::map.isInitialized) map.onPause(); super.onPause() }
     override fun onDestroy() { if (::map.isInitialized) map.onDetach(); super.onDestroy() }
 }
