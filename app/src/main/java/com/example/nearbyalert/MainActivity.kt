@@ -347,7 +347,7 @@ class MainActivity : AppCompatActivity() {
             val distance = if (meters < 1000) "${meters.toInt()}m" else String.format(java.util.Locale.KOREA, "%.1fkm", meters / 1000f)
             distanceView.text = "가장 가까운 목적지  ${nearest.name}  ·  $distance"
         }
-        if (!map.isAnimating && map.zoomLevelDouble >= 13.0) map.controller.animateTo(point)
+        if (map.zoomLevelDouble >= 13.0) map.controller.animateTo(point)
         map.invalidate()
     }
 
