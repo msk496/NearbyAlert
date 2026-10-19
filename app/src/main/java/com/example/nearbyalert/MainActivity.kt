@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var searchButton: Button
     private lateinit var distanceView: TextView
     private var currentMarker: Marker? = null
+    private var lastKnownLocation: Location? = null
     private lateinit var fusedLocation: FusedLocationProviderClient
     private var locationUpdatesStarted = false
     private val requestCode = 501
@@ -121,7 +122,28 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(16), dp(12), dp(16), dp(12))
             setBackgroundColor(Color.rgb(239, 246, 255))
         }
-        root.addView(distanceView, LinearLayout.LayoutParams(-1, dp(54)))
+        root.addView(ScrollView(this).apply { isFillViewport = false; addView(distanceView) }, LinearLayout.LayoutParams(-1, dp(112)))
+
+        val bottomPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        bottomPanel.addView(Button(this).apply {
+            text = "＋ 위치 추가"
+            textSize = 16f
+            setOnClickListener {
+                val loc = lastKnownLocation
+                if (loc != null) addDestination(GeoPoint(loc.latitude, loc.longitude))
+                else addDestination(map.mapCenter as GeoPoint)
+            }
+        }, LinearLayout.LayoutParams(0, dp(50), 1.2f))
+        bottomPanel.addView(Button(this).apply {
+            text = "등록된 위치"
+            textSize = 15f
+            setOnClickListener { showRegisteredDestinations() }
+        }, LinearLayout.LayoutParams(0, dp(50), 1f))
+        root.addView(bottomPanel)
 
         val mapControls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         mapControls.addView(Button(this).apply { text = "−"; textSize = 22f; setOnClickListener { map.controller.zoomOut() } }, LinearLayout.LayoutParams(0,dp(48),1f))
@@ -141,10 +163,7 @@ class MainActivity : AppCompatActivity() {
             status.text = "위치 감지를 중지했습니다."
         } }, LinearLayout.LayoutParams(0,-2,1f))
         root.addView(buttons)
-        root.addView(TextView(this).apply { text = "등록한 목적지"; textSize = 20f; setPadding(0,8,0,4) })
         destinationsView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val scroll = ScrollView(this).apply { addView(destinationsView) }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(145)))
         setContentView(root)
         requestBasicPermissions()
         renderDestinations()
@@ -308,6 +327,37 @@ class MainActivity : AppCompatActivity() {
         map.invalidate()
     }
 
+    private fun showRegisteredDestinations() {
+        val destinations = DestinationStore.get(this)
+        if (destinations.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("등록된 위치")
+                .setMessage("아직 등록된 위치가 없습니다. 지도에서 위치를 길게 누르거나 ‘위치 추가’를 눌러 등록하세요.")
+                .setPositiveButton("확인", null).show()
+            return
+        }
+        val labels = destinations.map { d ->
+            "${if (d.enabled) "●" else "○"}  ${d.name} · 반경 ${d.radiusMeters.toInt()}m"
+        }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("등록된 위치")
+            .setItems(labels) { _, which ->
+                val d = destinations[which]
+                AlertDialog.Builder(this).setTitle(d.name)
+                    .setItems(arrayOf(if (d.enabled) "알림 끄기" else "알림 켜기", "지도에서 보기", "삭제")) { _, action ->
+                        when (action) {
+                            0 -> updateDestination(d.copy(enabled = !d.enabled))
+                            1 -> { map.controller.setZoom(16.0); map.controller.animateTo(GeoPoint(d.latitude, d.longitude)) }
+                            2 -> AlertDialog.Builder(this).setMessage("${d.name}을(를) 삭제할까요?")
+                                .setNegativeButton("취소", null).setPositiveButton("삭제") { _, _ ->
+                                    DestinationStore.save(this, DestinationStore.get(this).filterNot { it.id == d.id })
+                                    renderDestinations()
+                                    refreshService()
+                                    lastKnownLocation?.let { updateLiveLocation(it) }
+                                }.show()
+                        }
+                    }.setNegativeButton("취소", null).show()
+            }.setPositiveButton("닫기", null).show()
+    }
+
     private fun updateDestination(d: Destination) {
         val items = DestinationStore.get(this)
         val index = items.indexOfFirst { it.id == d.id }
@@ -315,6 +365,7 @@ class MainActivity : AppCompatActivity() {
         DestinationStore.save(this, items)
         renderDestinations()
         refreshService()
+        lastKnownLocation?.let { updateLiveLocation(it) }
     }
 
     private fun refreshService() {
@@ -331,21 +382,19 @@ class MainActivity : AppCompatActivity() {
             }
             map.overlays.add(currentMarker)
         }
+        lastKnownLocation = location
         currentMarker?.position = point
         val destinations = DestinationStore.get(this).filter { it.enabled }
-        val nearest = destinations.minByOrNull { d ->
-            val out = FloatArray(1)
-            Location.distanceBetween(location.latitude, location.longitude, d.latitude, d.longitude, out)
-            out[0]
-        }
-        if (nearest == null) {
-            distanceView.text = "현재 위치 · 목적지를 등록하면 거리가 표시됩니다."
+        if (destinations.isEmpty()) {
+            distanceView.text = "활성화된 목적지가 없습니다.\n‘위치 추가’를 눌러 목적지를 등록하세요."
         } else {
-            val out = FloatArray(1)
-            Location.distanceBetween(location.latitude, location.longitude, nearest.latitude, nearest.longitude, out)
-            val meters = out[0]
-            val distance = if (meters < 1000) "${meters.toInt()}m" else String.format(java.util.Locale.KOREA, "%.1fkm", meters / 1000f)
-            distanceView.text = "가장 가까운 목적지  ${nearest.name}  ·  $distance"
+            distanceView.text = destinations.map { d ->
+                val out = FloatArray(1)
+                Location.distanceBetween(location.latitude, location.longitude, d.latitude, d.longitude, out)
+                val meters = out[0]
+                val distance = if (meters < 1000) "${meters.toInt()}m" else String.format(java.util.Locale.KOREA, "%.1fkm", meters / 1000f)
+                "●  ${d.name}  ·  $distance"
+            }.joinToString("\n")
         }
         if (map.zoomLevelDouble >= 13.0) map.controller.animateTo(point)
         map.invalidate()
