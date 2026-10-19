@@ -164,7 +164,6 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.rgb(28, 50, 80))
             setPadding(dp(14), dp(10), dp(14), dp(10))
             background = roundedBackground(Color.WHITE, dp(16))
-            maxLines = 4
             setLineSpacing(dp(3).toFloat(), 1f)
         }
         val distanceTitle = TextView(this).apply {
