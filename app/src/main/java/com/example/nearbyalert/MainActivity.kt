@@ -5,7 +5,6 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.location.Location
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -110,7 +109,16 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("취소", null)
             .setPositiveButton("추가") { _, _ ->
                 val items = DestinationStore.get(this)
-                items.add(Destination(UUID.randomUUID().toString(), input.text.toString().trim().ifBlank { "목적지 ${items.size+1}" }, point.latitude, point.longitude, radiusValues[spinner.selectedItemPosition].toFloat()))
+                val destination = Destination(
+                    id = UUID.randomUUID().toString(),
+                    name = input.text.toString().trim().ifBlank { "목적지 ${items.size + 1}" },
+                    latitude = point.latitude,
+                    longitude = point.longitude,
+                    radiusMeters = radiusValues[spinner.selectedItemPosition].toFloat(),
+                    enabled = true,
+                    favorite = false
+                )
+                items.add(destination)
                 DestinationStore.save(this, items)
                 renderDestinations()
                 refreshService()
