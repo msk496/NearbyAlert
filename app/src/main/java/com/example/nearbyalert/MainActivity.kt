@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
         searchInput = EditText(this).apply {
             hint = "장소·주소 검색 (예: 평촌역)"
             textSize = 16f
-            singleLine = true
+            setSingleLine(true)
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
         }
         searchRow.addView(searchInput, LinearLayout.LayoutParams(0, dp(52), 1f))
