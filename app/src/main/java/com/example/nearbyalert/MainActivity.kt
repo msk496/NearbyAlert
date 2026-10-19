@@ -349,23 +349,42 @@ class MainActivity : AppCompatActivity() {
             setSingleLine(true)
             if (!suggestedName.isNullOrBlank()) setText(suggestedName)
         }
-        val radiusOptions = arrayOf("100m", "300m", "500m", "1km", "2km", "5km")
-        val radiusValues = intArrayOf(100,300,500,1000,2000,5000)
-        val spinner = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, radiusOptions)
-            setSelection(3)
+        val radiusInput = EditText(this).apply {
+            hint = "알림 반경(미터, 예: 750)"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText("1000")
         }
-        val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,8,24,0); addView(input); addView(spinner) }
-        AlertDialog.Builder(this).setTitle("목적지 추가").setView(panel)
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(input)
+            addView(TextView(this@MainActivity).apply {
+                text = "이 거리 안으로 들어오면 알림을 보내요."
+                textSize = 12f
+                setTextColor(Color.rgb(100, 115, 135))
+                setPadding(0, dp(4), 0, 0)
+            })
+            addView(radiusInput)
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("목적지 추가").setView(panel)
             .setNegativeButton("취소", null)
-            .setPositiveButton("추가") { _, _ ->
+            .setPositiveButton("추가", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val radius = radiusInput.text.toString().trim().toFloatOrNull()
+                if (radius == null || radius < 25f || radius > 50000f) {
+                    radiusInput.error = "25~50000 사이의 미터 값을 입력하세요."
+                    return@setOnClickListener
+                }
                 val items = DestinationStore.get(this)
                 val destination = Destination(
                     id = UUID.randomUUID().toString(),
                     name = input.text.toString().trim().ifBlank { "목적지 ${items.size + 1}" },
                     latitude = point.latitude,
                     longitude = point.longitude,
-                    radiusMeters = radiusValues[spinner.selectedItemPosition].toFloat(),
+                    radiusMeters = radius,
                     enabled = true,
                     favorite = false
                 )
@@ -373,7 +392,10 @@ class MainActivity : AppCompatActivity() {
                 DestinationStore.save(this, items)
                 renderDestinations()
                 refreshService()
-            }.show()
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
     }
 
     private fun renderDestinations() {
