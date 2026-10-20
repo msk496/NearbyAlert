@@ -478,7 +478,7 @@ class MainActivity : AppCompatActivity() {
             currentMarker = Marker(map).apply {
                 title = "내 위치"
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                icon = ContextCompat.getDrawable(this@MainActivity, android.R.drawable.presence_online)
+                icon = ContextCompat.getDrawable(this@MainActivity, android.R.drawable.ic_menu_mylocation)
             }
             map.overlays.add(currentMarker)
         }
