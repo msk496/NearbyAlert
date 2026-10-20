@@ -87,6 +87,12 @@ class LocationTrackingService : Service() {
             .build()
     }
     private fun updateTrackingNotification(d:Destination?=null,meters:Float=Float.MAX_VALUE){val text=if(d==null)"활성 목적지를 기다리는 중" else "가장 가까운 ${d.name}: ${formatDistance(meters)} · 활성 목적지 ${DestinationStore.get(this).count{it.enabled}}개";(getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(1001,trackingNotification(text))}
-    override fun onDestroy(){if(::fused.isInitialized)fused.removeLocationUpdates(callback);started=false;super.onDestroy()}
+    override fun onDestroy(){
+        alertHandler.removeCallbacksAndMessages(null)
+        try { vibrator()?.cancel() } catch (_: Exception) { }
+        if(::fused.isInitialized) fused.removeLocationUpdates(callback)
+        started=false
+        super.onDestroy()
+    }
     override fun onBind(intent:Intent?):IBinder?=null
 }
