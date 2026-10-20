@@ -200,16 +200,12 @@ class MainActivity : AppCompatActivity() {
         }
         bottomPanel.addView(trackingToggle, LinearLayout.LayoutParams(0, dp(52), 0.82f).apply { rightMargin = dp(6) })
         bottomPanel.addView(Button(this).apply {
-            text = "＋ 위치 추가"
+            text = "◎ 현재 위치"
             textSize = 15f
             isAllCaps = false
             setTextColor(Color.WHITE)
             background = roundedBackground(Color.rgb(25, 116, 239), dp(15))
-            setOnClickListener {
-                val loc = lastKnownLocation
-                if (loc != null) addDestination(GeoPoint(loc.latitude, loc.longitude))
-                else addDestination(map.mapCenter as GeoPoint)
-            }
+            setOnClickListener { showCurrentLocation() }
         }, LinearLayout.LayoutParams(0, dp(52), 1.05f).apply { rightMargin = dp(6) })
         bottomPanel.addView(Button(this).apply {
             text = "등록된 위치  ›"
@@ -222,7 +218,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(bottomPanel)
         updateTrackingToggle()
 
-        root.addView(status)
         destinationsView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         setContentView(root)
         root.requestFocus()
@@ -526,10 +521,13 @@ class MainActivity : AppCompatActivity() {
         LocationServices.getFusedLocationProviderClient(this).getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { loc ->
                 if (loc != null) {
+                    updateLiveLocation(loc)
                     val point = GeoPoint(loc.latitude, loc.longitude)
-                    map.controller.setZoom(16.0); map.controller.animateTo(point)
-                    status.text = "현재 위치가 갱신되었습니다."
-                } else status.text = "현재 위치를 확인하지 못했습니다. 위치 서비스를 확인하세요."
+                    map.controller.setZoom(16.0)
+                    map.controller.animateTo(point)
+                } else {
+                    Toast.makeText(this, "현재 위치를 확인하지 못했습니다. 위치 서비스를 확인하세요.", Toast.LENGTH_LONG).show()
+                }
             }
     }
 
