@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.WindowManager
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -60,7 +61,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().userAgentValue = "NearbyAlert/1.0 (com.example.nearbyalert)"
         fusedLocation = LocationServices.getFusedLocationProviderClient(this)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         val root = LinearLayout(this).apply {
+            isFocusableInTouchMode = true
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(10), dp(14), dp(8))
             setBackgroundColor(Color.rgb(247, 249, 252))
@@ -222,6 +225,8 @@ class MainActivity : AppCompatActivity() {
         root.addView(status)
         destinationsView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         setContentView(root)
+        root.requestFocus()
+        searchInput.clearFocus()
         requestBasicPermissions()
         renderDestinations()
         handleDestinationIntent(intent)
