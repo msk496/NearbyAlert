@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.WindowManager
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -41,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var searchInput: EditText
     private lateinit var searchButton: Button
     private lateinit var distanceView: TextView
+    private lateinit var trackingToggle: Button
     private var currentMarker: Marker? = null
     private var lastKnownLocation: Location? = null
     private lateinit var fusedLocation: FusedLocationProviderClient
@@ -59,7 +61,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().userAgentValue = "NearbyAlert/1.0 (com.example.nearbyalert)"
         fusedLocation = LocationServices.getFusedLocationProviderClient(this)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         val root = LinearLayout(this).apply {
+            isFocusableInTouchMode = true
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(10), dp(14), dp(8))
             setBackgroundColor(Color.rgb(247, 249, 252))
@@ -188,9 +192,16 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(6), 0, dp(2))
         }
+        trackingToggle = Button(this).apply {
+            textSize = 13f
+            isAllCaps = false
+            setPadding(dp(4), 0, dp(4), 0)
+            setOnClickListener { toggleTracking() }
+        }
+        bottomPanel.addView(trackingToggle, LinearLayout.LayoutParams(0, dp(52), 0.82f).apply { rightMargin = dp(6) })
         bottomPanel.addView(Button(this).apply {
-            text = "＋  위치 추가"
-            textSize = 16f
+            text = "＋ 위치 추가"
+            textSize = 15f
             isAllCaps = false
             setTextColor(Color.WHITE)
             background = roundedBackground(Color.rgb(25, 116, 239), dp(15))
@@ -199,35 +210,23 @@ class MainActivity : AppCompatActivity() {
                 if (loc != null) addDestination(GeoPoint(loc.latitude, loc.longitude))
                 else addDestination(map.mapCenter as GeoPoint)
             }
-        }, LinearLayout.LayoutParams(0, dp(52), 1.15f).apply { rightMargin = dp(6) })
+        }, LinearLayout.LayoutParams(0, dp(52), 1.05f).apply { rightMargin = dp(6) })
         bottomPanel.addView(Button(this).apply {
             text = "등록된 위치  ›"
-            textSize = 15f
+            textSize = 14f
             isAllCaps = false
             setTextColor(Color.rgb(30, 76, 132))
             background = roundedBackground(Color.rgb(229, 240, 255), dp(15))
             setOnClickListener { startActivity(Intent(this@MainActivity, RegisteredLocationsActivity::class.java)) }
         }, LinearLayout.LayoutParams(0, dp(52), 1f))
         root.addView(bottomPanel)
+        updateTrackingToggle()
 
-        val controls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(4), 0, 0)
-        }
-        controls.addView(smallActionButton("내 위치") { showCurrentLocation() }, LinearLayout.LayoutParams(0, dp(42), 1f))
-        controls.addView(smallActionButton("감지 시작") { startTracking() }, LinearLayout.LayoutParams(0, dp(42), 1f))
-        controls.addView(smallActionButton("감지 중지") {
-            DestinationStore.prefs(this@MainActivity).edit().putBoolean("tracking_active", false).apply()
-            stopService(Intent(this@MainActivity, LocationTrackingService::class.java))
-            status.text = "위치 감지를 중지했습니다."
-        }, LinearLayout.LayoutParams(0, dp(42), 1f))
-        controls.addView(smallActionButton("−") { map.controller.zoomOut() }, LinearLayout.LayoutParams(dp(44), dp(42)))
-        controls.addView(smallActionButton("+") { map.controller.zoomIn() }, LinearLayout.LayoutParams(dp(44), dp(42)))
-        root.addView(controls)
         root.addView(status)
         destinationsView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         setContentView(root)
+        root.requestFocus()
+        searchInput.clearFocus()
         requestBasicPermissions()
         renderDestinations()
         handleDestinationIntent(intent)
@@ -497,7 +496,6 @@ class MainActivity : AppCompatActivity() {
                 "●  ${d.name}  ·  $distance"
             }.joinToString("\n")
         }
-        if (map.zoomLevelDouble >= 13.0) map.controller.animateTo(point)
         map.invalidate()
     }
 
@@ -535,6 +533,28 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
+    private fun toggleTracking() {
+        val active = DestinationStore.prefs(this).getBoolean("tracking_active", false)
+        if (active) {
+            DestinationStore.prefs(this).edit().putBoolean("tracking_active", false).apply()
+            stopService(Intent(this, LocationTrackingService::class.java))
+            status.text = "위치 감지를 중지했습니다."
+        } else {
+            startTracking()
+        }
+        updateTrackingToggle()
+    }
+
+    private fun updateTrackingToggle() {
+        if (!::trackingToggle.isInitialized) return
+        val active = DestinationStore.prefs(this).getBoolean("tracking_active", false)
+        trackingToggle.text = if (active) "● 감지 중지" else "▶ 감지 시작"
+        trackingToggle.setTextColor(if (active) Color.rgb(177, 47, 47) else Color.WHITE)
+        trackingToggle.background = roundedBackground(
+            if (active) Color.rgb(255, 235, 235) else Color.rgb(25, 116, 239), dp(15)
+        )
+    }
+
     private fun startTracking() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestBasicPermissions(); status.text = "정확한 위치 권한을 허용하세요."; return
@@ -554,7 +574,7 @@ class MainActivity : AppCompatActivity() {
         status.text = "위치 감지를 시작했습니다."
     }
 
-    override fun onResume() { super.onResume(); if (::map.isInitialized) map.onResume(); renderDestinations(); if (::fusedLocation.isInitialized) beginLiveLocationUpdates() }
+    override fun onResume() { super.onResume(); if (::map.isInitialized) map.onResume(); renderDestinations(); updateTrackingToggle(); if (::fusedLocation.isInitialized) beginLiveLocationUpdates() }
     override fun onPause() { stopLiveLocationUpdates(); if (::map.isInitialized) map.onPause(); super.onPause() }
     override fun onDestroy() { if (::map.isInitialized) map.onDetach(); super.onDestroy() }
 }
